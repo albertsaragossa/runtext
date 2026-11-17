@@ -30,7 +30,7 @@ label.chk{display:flex;align-items:center;gap:6px}label.chk input{padding:0}
 <body>
 <header>
 <h1>Runtext <span style="font:400 14px system-ui,sans-serif">Escriu amb els peus: ruta GPX amb lletres</span></h1>
-<label>Text (A-Z, 0-9, màx. 12)<input id="txt" type="text" maxlength="12" value="ALBERT"></label>
+<label>Text (lletres, xifres i símbols, màx. 12)<input id="txt" type="text" maxlength="12" value="ALBERT"></label>
 <label>Quilòmetres<input id="km" type="number" min="1" max="100" step="0.5" value="10"></label>
 <label>Rotació (<span id="rv">0</span>°)<input id="rot" type="range" min="-90" max="90" value="0"></label>
 <label class="chk"><input id="auto" type="checkbox"> Rotació automàtica</label>
@@ -49,6 +49,7 @@ label.chk{display:flex;align-items:center;gap:6px}label.chk input{padding:0}
 // Lletres d'un sol traç sobre una graella de 4x6; cada parell de xifres = (x,y); les coma separen traços.
 const G={A:"002640,1333",B:"00063645340434433000",C:"4536160501103041",D:"00063645413000",E:"46060040,0333",F:"460600,0333",G:"45361605011030414323",H:"0006,4046,0343",I:"1636,2620,1030",J:"3631201001",K:"0006,460340",L:"060040",M:"0006234640",N:"00064046",O:"100105163645413010",P:"000636453404",Q:"100105163645413010,2240",R:"000636453404,2440",S:"453616050413334241301001",T:"0646,2620",U:"060110304146",V:"062046",W:"0610233046",X:"0640,0046",Y:"0623,4623,2320",Z:"06460040",
 0:"100105163645413010",1:"152620",2:"05163645340040",3:"0516364534243342311001",4:"30360243",5:"4606033342311001",6:"4536160501103041423303",7:"064620",8:"14030110304143341405163645"+"34",9:"0110304145361605041343"};
+Object.assign(G,{'@':"32341412324245361605011030",'#':"1016,3036,0242,0444",'~':"0314233243",'%':"0046,0616150506,3141403031",'&':"40041626351201103042",'{':"36252313232130",'}':"16252333232110",'[':"36161030",']':"16363010",'(':"36141230",')':"16343210",'+':"0343,2125",'-':"0343",'*':"2125,0244,0442",'/':"0046",'.':"2021",',':"2110",'!':"2622,2021",'?':"05163645342322,2021",'=':"0242,0444",':':"2425,2122",'_':"0040"});
 const $=id=>document.getElementById(id);
 const map=L.map('map').setView([41.39,2.17],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
@@ -95,7 +96,7 @@ function draw(){
 }
 async function gen(){
  const S=glyphs($('txt').value);
- if(!S.length)return msg('Escriu alguna lletra o xifra (A-Z, 0-9).');
+ if(!S.length)return msg('Escriu text amb lletres, xifres o símbols admesos.');
  const target=$('km').value*1000;let m=target/ulen(S)/1.35,res;
  busy=true;$('gen').disabled=true;$('dl').disabled=true;
  try{
@@ -152,7 +153,7 @@ async function bestRot(S,m,c){
 }
 async function best(){
  const S=glyphs($('txt').value);
- if(!S.length)return msg('Escriu alguna lletra o xifra (A-Z, 0-9).');
+ if(!S.length)return msg('Escriu text amb lletres, xifres o símbols admesos.');
  const R=$('rad').value*1000,c0=mk.getLatLng(),k=111320*Math.cos(c0.lat*Math.PI/180),m=$('km').value*1000/ulen(S)/1.35,rot=+$('rot').value,C=[];
  for(let i=-2;i<=2;i++)for(let j=-2;j<=2;j++){const dx=i*R/2,dy=j*R/2;if(Math.hypot(dx,dy)<=R+1)C.push(L.latLng(c0.lat+dy/111320,c0.lng+dx/k))}
  busy=true;$('best').disabled=$('gen').disabled=true;

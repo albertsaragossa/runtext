@@ -6,7 +6,7 @@ Web que genera un arxiu GPX amb una ruta que, vista en un mapa 2D, dibuixa el te
 
 ## Com s'utilitza
 
-1. Escriu el text (lletres A-Z i xifres 0-9, fins a 12 caràcters).
+1. Escriu el text (lletres A-Z, xifres 0-9 i els símbols `@ # ~ % & { } [ ] ( ) + - * / . , ! ? = : _`, fins a 12 caràcters). Els accents es tracten com a lletres sense accent.
 2. Indica els quilòmetres que vols fer.
 3. Clica el mapa o cerca un lloc per triar el centre del dibuix. Pots arrossegar el marcador i girar el text amb la rotació.
 4. Marca **Rotació automàtica** perquè l'aplicació triï l'orientació que millor encaixa amb els carrers (si no, fes servir la rotació manual). Amb **Troba millor ubicació** cerca el lloc més adequat dins del radi indicat al voltant del marcador.
