@@ -21,6 +21,10 @@ button:disabled{opacity:.5;cursor:default}
 button:focus-visible,input:focus-visible{outline:3px solid var(--route);outline-offset:1px}
 #msg{grid-column:1/-1;font-size:13px;min-height:1.4em}
 #map{flex:1;min-height:300px}
+[hidden]{display:none!important}
+#stats{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 24px;padding:10px 14px;border-bottom:1px solid var(--line);background:#fff}
+#stats div{display:grid}#stats b{font:700 18px Georgia,serif}#stats .big b{font-size:36px;color:var(--route)}#stats span{font-size:12px}
+label.chk{display:flex;align-items:center;gap:6px}label.chk input{padding:0}
 </style>
 </head>
 <body>
@@ -29,12 +33,16 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--route);outline-
 <label>Text (A-Z, 0-9, màx. 12)<input id="txt" type="text" maxlength="12" value="ALBERT"></label>
 <label>Quilòmetres<input id="km" type="number" min="1" max="100" step="0.5" value="10"></label>
 <label>Rotació (<span id="rv">0</span>°)<input id="rot" type="range" min="-90" max="90" value="0"></label>
+<label class="chk"><input id="auto" type="checkbox"> Rotació automàtica</label>
+<label>Radi de cerca (km)<input id="rad" type="number" min="0.5" max="20" step="0.5" value="3"></label>
 <label>Cerca un lloc<input id="q" type="text" style="text-transform:none;letter-spacing:0" placeholder="Ciutat o barri"></label>
 <button class="sec" id="go">Cerca</button>
 <button id="gen">Genera ruta</button>
+<button class="sec" id="best">Troba millor ubicació</button>
 <button class="sec" id="dl" disabled>Baixa el GPX</button>
 <div id="msg">Clica el mapa per triar el centre del text.</div>
 </header>
+<section id="stats" hidden></section>
 <div id="map"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -57,8 +65,8 @@ function glyphs(t){
  const w=x-2;return S.map(s=>s.map(([a,b])=>[a-w/2,b-3]));
 }
 const ulen=S=>{let l=0,p=null;for(const s of S)for(const q of s){if(p)l+=Math.hypot(q[0]-p[0],q[1]-p[1]);p=q}return l};
-function place(S,m){
- const c=mk.getLatLng(),r=+$('rot').value*Math.PI/180,co=Math.cos(r),si=Math.sin(r),k=111320*Math.cos(c.lat*Math.PI/180);
+function place(S,m,c=mk.getLatLng(),deg=+$('rot').value){
+ const r=deg*Math.PI/180,co=Math.cos(r),si=Math.sin(r),k=111320*Math.cos(c.lat*Math.PI/180);
  return S.map(s=>s.map(([x,y])=>[c.lat+((x*si+y*co)*m)/111320,c.lng+((x*co-y*si)*m)/k]));
 }
 function dens(L){
@@ -82,7 +90,7 @@ async function snap(P){
 function draw(){
  if(busy)return;
  const S=glyphs($('txt').value);
- route.setLatLngs([]);pts=[];$('dl').disabled=true;
+ route.setLatLngs([]);pts=[];$('dl').disabled=true;$('stats').hidden=true;
  free.setLatLngs(S.length?place(S,$('km').value*1000/ulen(S)/1.35):[]);
 }
 async function gen(){
@@ -91,6 +99,7 @@ async function gen(){
  const target=$('km').value*1000;let m=target/ulen(S)/1.35,res;
  busy=true;$('gen').disabled=true;$('dl').disabled=true;
  try{
+  if($('auto').checked){const b=await bestRot(S,m,mk.getLatLng());if(b[0]<Infinity){$('rot').value=b[1];$('rv').textContent=b[1]}}
   for(let it=1;it<=3;it++){
    msg('Calculant ruta pels carrers… ('+it+'/3)');
    const L=place(S,m);free.setLatLngs(L);
@@ -100,9 +109,62 @@ async function gen(){
    m*=f;
   }
   pts=res.out;route.setLatLngs(pts);map.fitBounds(route.getBounds());
-  msg('Ruta llesta: '+(res.dist/1000).toFixed(1)+' km reals.');$('dl').disabled=false;
+  msg('Ruta llesta.');$('dl').disabled=false;
+  const mine=pts,km=res.dist/1000;stats(km,null);elev(pts).then(g=>{if(pts===mine)stats(km,g)});
  }catch(e){msg('No s\'ha pogut calcular la ruta: '+e.message+'. Prova una altra zona o torna-ho a provar.')}
  busy=false;$('gen').disabled=false;
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const PACES=[7,6,5.5,5];
+const fmtT=x=>{const t=Math.round(x);return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')+' h'};
+const fmtP=p=>Math.floor(p)+':'+String(Math.round(p%1*60)).padStart(2,'0');
+function stats(km,g){
+ const st=$('stats');st.hidden=false;
+ st.innerHTML='<div class="big"><b>'+km.toFixed(1)+' km</b><span>distància real</span></div><div><b>'+(g==null?'…':typeof g=='number'?'+'+g+' m':'n/d')+'</b><span>desnivell acumulat (aprox.)</span></div>'+PACES.map(p=>'<div><b>'+fmtT(km*p)+'</b><span>a '+fmtP(p)+' min/km</span></div>').join('');
+}
+async function elev(P){
+ try{
+  const A=[P[0]];for(const p of P)if(map.distance(A[A.length-1],p)>=100)A.push(p);
+  const E=[];
+  for(let i=0;i<A.length;i+=100){const c=A.slice(i,i+100);
+   const r=await fetch('https://api.open-meteo.com/v1/elevation?latitude='+c.map(p=>p[0].toFixed(4))+'&longitude='+c.map(p=>p[1].toFixed(4)));
+   E.push(...(await r.json()).elevation)}
+  const M=E.map((_,i)=>(E[Math.max(0,i-1)]+E[i]+E[Math.min(E.length-1,i+1)])/3);
+  let g=0;for(let i=1;i<M.length;i++)g+=Math.max(0,M[i]-M[i-1]);
+  return Math.round(g);
+ }catch(e){return 'n/d'}
+}
+// Puntuació d'encaix: ruta pels carrers / dibuix lliure (com més a prop d'1, millor).
+async function score(S,m,c,deg){
+ try{
+  const L=place(S,m,c,deg),A=L.flat();let f=0;
+  for(let i=1;i<A.length;i++)f+=map.distance(A[i-1],A[i]);
+  return (await snap(dens(L))).dist/f;
+ }catch(e){return Infinity}
+}
+async function bestRot(S,m,c){
+ let b=[Infinity,0];
+ for(const r of [0,-15,15,-30,30,-45,45,-60,60]){
+  msg('Cercant la millor rotació… '+r+'°');
+  const s=await score(S,m,c,r);if(s<b[0])b=[s,r];await sleep(150);
+ }
+ return b;
+}
+async function best(){
+ const S=glyphs($('txt').value);
+ if(!S.length)return msg('Escriu alguna lletra o xifra (A-Z, 0-9).');
+ const R=$('rad').value*1000,c0=mk.getLatLng(),k=111320*Math.cos(c0.lat*Math.PI/180),m=$('km').value*1000/ulen(S)/1.35,rot=+$('rot').value,C=[];
+ for(let i=-2;i<=2;i++)for(let j=-2;j<=2;j++){const dx=i*R/2,dy=j*R/2;if(Math.hypot(dx,dy)<=R+1)C.push(L.latLng(c0.lat+dy/111320,c0.lng+dx/k))}
+ busy=true;$('best').disabled=$('gen').disabled=true;
+ let b=[Infinity,null];
+ for(let n=0;n<C.length;n++){
+  msg('Provant ubicacions… '+(n+1)+'/'+C.length);
+  const s=await score(S,m,C[n],rot);if(s<b[0])b=[s,C[n]];await sleep(150);
+ }
+ busy=false;
+ if(b[1]){mk.setLatLng(b[1]);map.setView(b[1],14);await gen()}
+ else msg('No he trobat cap ubicació vàlida. Amplia el radi o prova una altra zona.');
+ $('best').disabled=$('gen').disabled=false;
 }
 function gpx(){
  const n=$('txt').value.trim().replace(/[&<>]/g,'');
@@ -122,6 +184,7 @@ async function search(){
 map.on('click',e=>{mk.setLatLng(e.latlng);draw()});
 mk.on('dragend',draw);
 ['txt','km','rot'].forEach(i=>$(i).addEventListener('input',()=>{$('rv').textContent=$('rot').value;draw()}));
+$('best').onclick=best;$('auto').onchange=()=>{$('rot').disabled=$('auto').checked};
 $('gen').onclick=gen;$('dl').onclick=gpx;$('go').onclick=search;
 $('q').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
 draw();
